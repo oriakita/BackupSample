@@ -18,6 +18,7 @@ namespace BackupSample.ViewModels
         private readonly string _connectionString = "AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;DefaultEndpointsProtocol=http;BlobEndpoint=http://127.0.0.1:10000/devstoreaccount1;QueueEndpoint=http://127.0.0.1:10001/devstoreaccount1;TableEndpoint=http://127.0.0.1:10002/devstoreaccount1;";
         private readonly BackupService _backupService;
         private readonly RecoveryService _recoveryService;
+        private readonly VirtualDriveService _virtualDriveService;
         public bool IsFileListVisible { get; set; } = false;
         public ObservableCollection<VolumeInfo> VolumeList { get; set; } = [];
 
@@ -48,6 +49,12 @@ namespace BackupSample.ViewModels
         [ObservableProperty]
         private ObservableCollection<FileMetadata>? selectedBackupFiles = new();
 
+        [ObservableProperty]
+        private string? mountedDriveLetter = null;
+
+        [ObservableProperty]
+        private bool isBackupMounted = false;
+
         public bool CanStartBackup => SelectedPaths.Count > 0;
         public bool CanStartVolumeBackup => SelectedVolume != null && SelectedVolume.Path != "";
         public bool CanRecovery => SelectedBackup != null && !string.IsNullOrEmpty(RecoveryLocation);
@@ -65,6 +72,8 @@ namespace BackupSample.ViewModels
             VolumeRecoveryLocation != null &&
             VolumeRecoveryLocation.Path != "" &&
             !string.IsNullOrEmpty(RecoveryLocation);
+        public bool CanMountBackup => SelectedBackup != null && !IsBackupMounted;
+        public bool CanUnmountBackup => IsBackupMounted;
 
         #endregion
 
@@ -77,11 +86,13 @@ namespace BackupSample.ViewModels
             {
                 _backupService = null!;
                 _recoveryService = null!;
+                _virtualDriveService = null!;
                 return;
             }
 
             _backupService = new BackupService(_connectionString);
             _recoveryService = new RecoveryService(_connectionString);
+            _virtualDriveService = new VirtualDriveService();
 
             _ = LoadAvailableBackupsAsync();
             VolumeList = new ObservableCollection<VolumeInfo>();
@@ -365,6 +376,22 @@ namespace BackupSample.ViewModels
             OnPropertyChanged(nameof(CanRecoveryFile));
             OnPropertyChanged(nameof(CanRecoveryFolder));
             OnPropertyChanged(nameof(CanRecoveryVolume));
+            OnPropertyChanged(nameof(CanMountBackup));
+
+            // Unmount previous backup if a different one is selected
+            if (IsBackupMounted && value != null)
+            {
+                var result = System.Windows.MessageBox.Show(
+                    "A backup is currently mounted. Unmount it to mount the new backup?",
+                    "Unmount Current Backup",
+                    System.Windows.MessageBoxButton.YesNo,
+                    System.Windows.MessageBoxImage.Question);
+
+                if (result == System.Windows.MessageBoxResult.Yes)
+                {
+                    UnmountBackup();
+                }
+            }
         }
 
         partial void OnRecoveryLocationChanged(string value)
@@ -378,6 +405,12 @@ namespace BackupSample.ViewModels
         partial void OnVolumeRecoveryLocationChanged(VolumeInfo? value)
         {
             OnPropertyChanged(nameof(CanRecoveryVolume));
+        }
+
+        partial void OnIsBackupMountedChanged(bool value)
+        {
+            OnPropertyChanged(nameof(CanMountBackup));
+            OnPropertyChanged(nameof(CanUnmountBackup));
         }
 
         partial void OnSelectedVolumeChanged(VolumeInfo? value)
@@ -448,6 +481,91 @@ namespace BackupSample.ViewModels
                     Name = drive.Name.Replace("\\", ""),
                     Path = drive.RootDirectory.FullName
                 });
+            }
+        }
+
+        [RelayCommand]
+        private async Task MountBackup()
+        {
+            if (!CanMountBackup || SelectedBackup == null) return;
+
+            try
+            {
+                var (success, driveLetter, message) = await _recoveryService.MountBackupAsync(
+                    SelectedBackup,
+                    _virtualDriveService);
+
+                if (success && driveLetter != null)
+                {
+                    MountedDriveLetter = driveLetter;
+                    IsBackupMounted = true;
+
+                    // Open Explorer at the mounted drive
+                    _virtualDriveService.OpenExplorer(driveLetter);
+
+                    System.Windows.MessageBox.Show(
+                        message ?? $"Backup mounted to {driveLetter}:\\",
+                        "Mount Success",
+                        System.Windows.MessageBoxButton.OK,
+                        System.Windows.MessageBoxImage.Information);
+                }
+                else
+                {
+                    System.Windows.MessageBox.Show(
+                        message ?? "Failed to mount backup",
+                        "Mount Error",
+                        System.Windows.MessageBoxButton.OK,
+                        System.Windows.MessageBoxImage.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Windows.MessageBox.Show(
+                    ex.Message,
+                    "Mount Error",
+                    System.Windows.MessageBoxButton.OK,
+                    System.Windows.MessageBoxImage.Error);
+            }
+        }
+
+        [RelayCommand]
+        private void UnmountBackup()
+        {
+            if (!CanUnmountBackup) return;
+
+            try
+            {
+                var success = _recoveryService.UnmountBackup(_virtualDriveService);
+
+                if (success)
+                {
+                    var oldDrive = MountedDriveLetter;
+                    MountedDriveLetter = null;
+                    IsBackupMounted = false;
+
+                    System.Windows.MessageBox.Show(
+                        $"Drive {oldDrive}:\\ unmounted successfully",
+                        "Unmount Success",
+                        System.Windows.MessageBoxButton.OK,
+                        System.Windows.MessageBoxImage.Information);
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Windows.MessageBox.Show(
+                    ex.Message,
+                    "Unmount Error",
+                    System.Windows.MessageBoxButton.OK,
+                    System.Windows.MessageBoxImage.Error);
+            }
+        }
+
+        [RelayCommand]
+        private void OpenMountedDrive()
+        {
+            if (MountedDriveLetter != null)
+            {
+                _virtualDriveService.OpenExplorer(MountedDriveLetter);
             }
         }
 

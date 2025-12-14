@@ -6,6 +6,7 @@
         WindowStartupLocation="CenterScreen">
 
     <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
         <converters:EnumBooleanConverter x:Key="EnumBooleanConverter"/>
         <Style x:Key="HeaderStyle" TargetType="TextBlock">
             <Setter Property="FontSize" Value="16"/>
@@ -86,6 +87,7 @@
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
@@ -183,6 +185,37 @@
                             Background="#28a745" Foreground="White"
                             Padding="20,10" FontWeight="Bold"
                             Margin="0,0,10,0"/>
+
+                        <Button Content="📁 Mount as Virtual Drive"
+                            Command="{Binding MountBackupCommand}"
+                            IsEnabled="{Binding CanMountBackup}"
+                            Background="#007bff" Foreground="White"
+                            Padding="20,10" FontWeight="Bold"
+                            Margin="0,0,10,0"
+                            ToolTip="Mount backup to browse and copy files like a regular drive"/>
+
+                        <Button Content="⏏ Unmount Drive"
+                            Command="{Binding UnmountBackupCommand}"
+                            IsEnabled="{Binding CanUnmountBackup}"
+                            Background="#dc3545" Foreground="White"
+                            Padding="20,10" FontWeight="Bold"
+                            Margin="0,0,10,0"/>
+
+                        <Button Content="🗂 Open Mounted Drive"
+                            Command="{Binding OpenMountedDriveCommand}"
+                            IsEnabled="{Binding IsBackupMounted}"
+                            Background="#17a2b8" Foreground="White"
+                            Padding="20,10" FontWeight="Bold"
+                            Visibility="{Binding IsBackupMounted, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                    </StackPanel>
+
+                    <StackPanel Grid.Row="5" Orientation="Horizontal" Margin="0,10,0,0"
+                                Visibility="{Binding IsBackupMounted, Converter={StaticResource BoolToVisibilityConverter}}">
+                        <TextBlock Text="✓ Backup Mounted: " FontWeight="Bold" Foreground="Green" VerticalAlignment="Center"/>
+                        <TextBlock Text="{Binding MountedDriveLetter, StringFormat={}{0}:\\}" 
+                                   FontWeight="Bold" Foreground="Green" VerticalAlignment="Center" Margin="5,0,0,0"/>
+                        <TextBlock Text=" - You can now browse and copy files from Windows Explorer" 
+                                   FontStyle="Italic" VerticalAlignment="Center" Margin="10,0,0,0"/>
                     </StackPanel>
                 </Grid>
             </TabItem>

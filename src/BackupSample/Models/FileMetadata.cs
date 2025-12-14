@@ -68,8 +68,8 @@ namespace BackupSample.Models
 
     public class VolumeInfo
     {
-        public string Name { get; set; }
-        public string Path { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public string Path { get; set; } = string.Empty;
     }
 
     public enum BackupType

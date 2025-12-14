@@ -14,7 +14,8 @@ namespace BackupSample.Services
         private readonly CompressionService _compressionService;
         private readonly string _passphrase = "BACKUP-TEST-2025";
         private readonly IEncryptionService _encryptionService;
-
+        private string? _currentMountPath = null;
+        private string? _currentMountDrive = null;
 
         public RecoveryService(string connectionString)
         {
@@ -356,5 +357,96 @@ namespace BackupSample.Services
         //    fileInfo.Attributes = fileMetadata.Attributes;
         //    fileInfo.LastWriteTimeUtc = fileMetadata.LastModified;
         //}
+
+        #region Virtual Drive Mounting
+
+        /// <summary>
+        /// Mount backup to a virtual drive for browsing
+        /// </summary>
+        public async Task<(bool success, string? driveLetter, string? message)> MountBackupAsync(
+            BackupManifest manifest,
+            VirtualDriveService driveService)
+        {
+            try
+            {
+                // Find available drive letter
+                var driveLetter = driveService.GetAvailableDriveLetter();
+                if (driveLetter == null)
+                    return (false, null, "No available drive letters");
+
+                // Create temp mount directory
+                var tempPath = Path.Combine(Path.GetTempPath(), $"BackupMount_{manifest.Id}");
+                if (Directory.Exists(tempPath))
+                    Directory.Delete(tempPath, true);
+                Directory.CreateDirectory(tempPath);
+
+                // Restore all files to temp location
+                await RecoveryFilesAsync(manifest, tempPath, null, RecoveryOption.Overwrite);
+
+                // Create virtual drive
+                var success = driveService.CreateVirtualDrive(driveLetter, tempPath);
+                if (!success)
+                {
+                    Directory.Delete(tempPath, true);
+                    return (false, null, "Failed to create virtual drive");
+                }
+
+                _currentMountPath = tempPath;
+                _currentMountDrive = driveLetter;
+
+                return (true, driveLetter, $"Backup mounted to {driveLetter}:\\ - You can now browse and copy files");
+            }
+            catch (Exception ex)
+            {
+                return (false, null, $"Error mounting backup: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Unmount and cleanup virtual drive
+        /// </summary>
+        public bool UnmountBackup(VirtualDriveService driveService)
+        {
+            try
+            {
+                if (_currentMountDrive != null)
+                {
+                    driveService.DeleteVirtualDrive(_currentMountDrive);
+                    _currentMountDrive = null;
+                }
+
+                if (_currentMountPath != null && Directory.Exists(_currentMountPath))
+                {
+                    // Wait a bit for explorer to release files
+                    System.Threading.Thread.Sleep(500);
+                    try
+                    {
+                        Directory.Delete(_currentMountPath, true);
+                    }
+                    catch
+                    {
+                        // Cleanup will happen on next app start or temp cleanup
+                    }
+                    _currentMountPath = null;
+                }
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error unmounting: {ex.Message}");
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Get current mount info
+        /// </summary>
+        public (string? driveLetter, string? path) GetMountInfo()
+        {
+            return (_currentMountDrive, _currentMountPath);
+        }
+
+        #endregion
     }
 }
