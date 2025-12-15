@@ -96,6 +96,7 @@ namespace BackupSample.Services
         private async Task<List<FileMetadata>> ScanFilesAsync(List<string> paths, BackupManifest manifest)
         {
             var files = new List<FileMetadata>();
+            string backupRoot = GetBackupRoot();
 
             foreach (var path in paths)
             {
@@ -105,7 +106,9 @@ namespace BackupSample.Services
                 }
                 else if (Directory.Exists(path))
                 {
-                    var folderFiles = await ScanFolderAsync(path, path, manifest); // folder root = path
+                    // Use backupRoot for calculating relative paths consistently
+                    string rootForRelativePaths = !string.IsNullOrEmpty(backupRoot) ? backupRoot : path;
+                    var folderFiles = await ScanFolderAsync(rootForRelativePaths, path, manifest);
                     files.AddRange(folderFiles);
                 }
             }
