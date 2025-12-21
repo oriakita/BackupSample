@@ -135,13 +135,22 @@ namespace BackupSample.Services
             string name = Path.GetFileNameWithoutExtension(path);
             string ext = Path.GetExtension(path);
 
-            int i = 1;
-            string newPath;
-            do
+            // Format: YYYY-MM-DD HH-mm Copy of <original file name>
+            string timestamp = DateTime.Now.ToString("yyyy-MM-dd HH-mm");
+            string baseName = $"{timestamp} Copy of {name}{ext}";
+            string newPath = Path.Combine(dir, baseName);
+
+            // If the first copy already exists, use format: YYYY-MM-DD HH-mm Copy (n) of <original file name>
+            if (File.Exists(newPath))
             {
-                newPath = Path.Combine(dir, $"{name}({i}){ext}");
-                i++;
-            } while (File.Exists(newPath));
+                int n = 2;
+                do
+                {
+                    baseName = $"{timestamp} Copy ({n}) of {name}{ext}";
+                    newPath = Path.Combine(dir, baseName);
+                    n++;
+                } while (File.Exists(newPath));
+            }
 
             return newPath;
         }
